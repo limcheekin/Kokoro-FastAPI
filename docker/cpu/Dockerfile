@@ -29,9 +29,8 @@ ENV PATH="/home/appuser/.cargo/bin:/app/.venv/bin:$PATH" \
 COPY --chown=appuser:appuser pyproject.toml ./pyproject.toml
 
 # Create venv and install dependencies in one RUN command
-RUN uv venv --python 3.10 && \
-    . /app/.venv/bin/activate && \
-    uv sync --extra cpu --no-cache
+RUN uv venv --python 3.10 --allow-existing && \
+    uv sync --extra cpu --no-cache --venv /app/.venv
 
 # Copy project files including models
 COPY --chown=appuser:appuser api ./api
