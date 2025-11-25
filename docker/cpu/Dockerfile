@@ -17,20 +17,15 @@ RUN apt-get update -y &&  \
 USER appuser
 WORKDIR /app
 
-# Install Rust for the non-root user so builds (e.g., sudachipy) succeed
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
-
-# Ensure Cargo and the Python venv are on PATH; extend HTTP timeouts for uv
-ENV PATH="/home/appuser/.cargo/bin:/app/.venv/bin:$PATH" \
-    UV_HTTP_TIMEOUT=120 \
-    UV_HTTP_RETRIES=3
-
-# Copy dependency files
+# Copy dependency files FIRST before installing Rust (needed for build)
 COPY --chown=appuser:appuser pyproject.toml ./pyproject.toml
 
-# Create venv and install dependencies in one RUN command
-RUN uv venv --python 3.10 --allow-existing && \
-    uv sync --extra cpu --no-cache --venv /app/.venv
+# Install Rust and create venv in one RUN to ensure proper environment
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
+    export PATH="/home/appuser/.cargo/bin:$PATH" && \
+    uv venv --python 3.10 && \
+    export PATH="/app/.venv/bin:$PATH" && \
+    uv sync --extra cpu --no-cache 2>&1
 
 # Copy project files including models
 COPY --chown=appuser:appuser api ./api
@@ -38,8 +33,11 @@ COPY --chown=appuser:appuser web ./web
 COPY --chown=appuser:appuser docker/scripts/ ./
 RUN chmod +x ./entrypoint.sh
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1 \
+# Ensure Cargo and the Python venv are on PATH; extend HTTP timeouts for uv
+ENV PATH="/home/appuser/.cargo/bin:/app/.venv/bin:$PATH" \
+    UV_HTTP_TIMEOUT=120 \
+    UV_HTTP_RETRIES=3 \
+    PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app:/app/api \
     UV_LINK_MODE=copy \
     USE_GPU=false \
@@ -48,6 +46,7 @@ ENV PYTHONUNBUFFERED=1 \
     ESPEAK_DATA_PATH=/usr/share/espeak-ng-data \
     DEVICE="cpu"
 
+# Set environment variables
 ENV DOWNLOAD_MODEL=true
 # Download model if enabled
 RUN if [ "$DOWNLOAD_MODEL" = "true" ]; then \
